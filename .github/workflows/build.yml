@@ -10,11 +10,6 @@ jobs:
       - name: Checkout Source
         uses: actions/checkout@v4
 
-      - name: Fix Broken Submodule Cache
-        run: |
-          git rm --cached drivers/aircrack/rtl8812au || true
-          git submodule update --init --recursive || true
-
       - name: Install Dependencies
         run: |
           sudo apt-get update
@@ -23,6 +18,18 @@ jobs:
       - name: Clone Toolchain
         run: |
           git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
+
+      - name: Download and Setup 88XXau Driver Automatically
+        run: |
+          # ১. সঠিক ড্রাইভারটি ডাউনলোড করা হচ্ছে
+          git clone --depth=1 https://github.com/aircrack-ng/rtl8812au.git drivers/aircrack/rtl8812au
+          
+          # ২. কার্নেলের জন্য ড্রাইভারের Makefile ঠিক করা হচ্ছে
+          sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' drivers/aircrack/rtl8812au/Makefile
+          sed -i 's/CONFIG_PLATFORM_ANDROID = n/CONFIG_PLATFORM_ANDROID = y/g' drivers/aircrack/rtl8812au/Makefile
+          
+          # ৩. defconfig-এ ড্রাইভারটি চালু করা
+          echo "CONFIG_88XXAU=y" >> arch/arm64/configs/lavender-perf_defconfig
 
       - name: Build Kernel
         run: |
@@ -42,18 +49,14 @@ jobs:
           rm -rf anykernel/.git
           cp out/arch/arm64/boot/Image.gz-dtb anykernel/
           
-          # ১. ডিভাইসের নাম ফিক্স (maguro, toro বাদ দিয়ে lavender বসানো)
           sed -i 's/^device.name1=.*/device.name1=lavender/' anykernel/anykernel.sh
           sed -i 's/^device.name2=.*/device.name2=/' anykernel/anykernel.sh
           sed -i 's/^device.name3=.*/device.name3=/' anykernel/anykernel.sh
           sed -i 's/^device.name4=.*/device.name4=/' anykernel/anykernel.sh
           sed -i 's/^device.name5=.*/device.name5=/' anykernel/anykernel.sh
           
-          # ২. বুট ব্লক পাথ ফিক্স
           sed -i 's|^BLOCK=.*|BLOCK=/dev/block/bootdevice/by-name/boot;|' anykernel/anykernel.sh
           sed -i 's|^block=.*|block=/dev/block/bootdevice/by-name/boot;|' anykernel/anykernel.sh
-          
-          # ৩. স্লট ডিভাইস ফিক্স
           sed -i 's/^IS_SLOT_DEVICE=.*/IS_SLOT_DEVICE=0;/' anykernel/anykernel.sh
           
       - name: Create Flashable ZIP
