@@ -21,21 +21,23 @@ jobs:
 
       - name: Setup 88XXau Driver Automatically
         run: |
-          # ১. ড্রাইভারটি সরাসরি সঠিক ফোল্ডারে ডাউনলোড করা হচ্ছে
+          # ১. ড্রাইভার ডাউনলোড
           git clone --depth=1 https://github.com/aircrack-ng/rtl8812au.git drivers/net/wireless/realtek/rtl8812au
-          
-          # ২. গিটহাবের বাড়তি .git ফোল্ডার মুছে ফেলা (এরর এড়াতে)
           rm -rf drivers/net/wireless/realtek/rtl8812au/.git
           
-          # ৩. ড্রাইভারের Makefile-এ Android প্ল্যাটফর্ম চালু করা
-          sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' drivers/net/wireless/realtek/rtl8812au/Makefile
-          sed -i 's/CONFIG_PLATFORM_ANDROID = n/CONFIG_PLATFORM_ANDROID = y/g' drivers/net/wireless/realtek/rtl8812au/Makefile
+          # ২. ড্রাইভারের Makefile প্যাচ করা (obj-m থেকে obj-y তে কনভার্ট করা)
+          cd drivers/net/wireless/realtek/rtl8812au
+          sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' Makefile
+          sed -i 's/CONFIG_PLATFORM_ANDROID_ARM64 = n/CONFIG_PLATFORM_ANDROID_ARM64 = y/g' Makefile
+          sed -i 's/obj-m := $(MODULE_NAME).o/obj-$(CONFIG_RTL8812AU) += $(MODULE_NAME).o/g' Makefile
+          cd ../../../..
           
-          # ৪. কার্নেলের Kconfig এবং Makefile-এ এন্ট্রি দেওয়া
+          # ৩. কার্নেল ট্রিতে ড্রাইভার রেজিস্ট্রেশন
           echo 'source "drivers/net/wireless/realtek/rtl8812au/Kconfig"' >> drivers/net/wireless/realtek/Kconfig
           echo 'obj-$(CONFIG_RTL8812AU) += rtl8812au/' >> drivers/net/wireless/realtek/Makefile
           
-          # ৫. defconfig-এ ড্রাইভারটি চালু করা এবং পুরোনো rtl8xxxu বন্ধ করা
+          # ৪. defconfig ফিক্স (88XXAU চালু, rtl8xxxu বন্ধ)
+          sed -i 's/CONFIG_88XXAU=.*/CONFIG_88XXAU=y/g' arch/arm64/configs/lavender-perf_defconfig
           echo "CONFIG_RTL8812AU=y" >> arch/arm64/configs/lavender-perf_defconfig
           echo "# CONFIG_RTL8XXXU is not set" >> arch/arm64/configs/lavender-perf_defconfig
 
