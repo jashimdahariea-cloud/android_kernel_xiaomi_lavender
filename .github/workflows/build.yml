@@ -19,17 +19,21 @@ jobs:
         run: |
           git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
 
-      - name: Download and Setup 88XXau Driver Automatically
+      - name: Setup 88XXau Driver Automatically
         run: |
-          # ১. সঠিক ড্রাইভারটি ডাউনলোড করা হচ্ছে
-          git clone --depth=1 https://github.com/aircrack-ng/rtl8812au.git drivers/aircrack/rtl8812au
+          # ১. ড্রাইভারটি সরাসরি সঠিক ফোল্ডারে ডাউনলোড করা হচ্ছে
+          git clone --depth=1 https://github.com/aircrack-ng/rtl8812au.git drivers/net/wireless/realtek/rtl8812au
           
-          # ২. কার্নেলের জন্য ড্রাইভারের Makefile ঠিক করা হচ্ছে
-          sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' drivers/aircrack/rtl8812au/Makefile
-          sed -i 's/CONFIG_PLATFORM_ANDROID = n/CONFIG_PLATFORM_ANDROID = y/g' drivers/aircrack/rtl8812au/Makefile
+          # ২. ড্রাইভারের Makefile-এ Android ARM64 সাপোর্ট চালু করা
+          sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' drivers/net/wireless/realtek/rtl8812au/Makefile
+          sed -i 's/CONFIG_PLATFORM_ANDROID_ARM64 = n/CONFIG_PLATFORM_ANDROID_ARM64 = y/g' drivers/net/wireless/realtek/rtl8812au/Makefile
           
-          # ৩. defconfig-এ ড্রাইভারটি চালু করা
-          echo "CONFIG_88XXAU=y" >> arch/arm64/configs/lavender-perf_defconfig
+          # ৩. কার্নেলের Kconfig এবং Makefile-এ এন্ট্রি দেওয়া
+          echo 'source "drivers/net/wireless/realtek/rtl8812au/Kconfig"' >> drivers/net/wireless/realtek/Kconfig
+          echo 'obj-$(CONFIG_RTL8812AU) += rtl8812au/' >> drivers/net/wireless/realtek/Makefile
+          
+          # ৪. defconfig-এ ড্রাইভারটি চালু করা
+          echo "CONFIG_RTL8812AU=y" >> arch/arm64/configs/lavender-perf_defconfig
 
       - name: Build Kernel
         run: |
@@ -43,7 +47,7 @@ jobs:
           make O=out ARCH=arm64 lavender-perf_defconfig
           make O=out ARCH=arm64 -j$(nproc) 2>&1 | tee build.log
 
-      - name: Clone AnyKernel3 and Apply Fixes (Claude AI Fix)
+      - name: Clone AnyKernel3 and Apply Fixes
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git anykernel
           rm -rf anykernel/.git
