@@ -25,18 +25,22 @@ jobs:
           git clone --depth=1 https://github.com/aircrack-ng/rtl8812au.git drivers/net/wireless/realtek/rtl8812au
           rm -rf drivers/net/wireless/realtek/rtl8812au/.git
           
-          # ২. ড্রাইভারের Makefile প্যাচ করা (obj-m থেকে obj-y তে কনভার্ট করা)
+          # ২. ড্রাইভারের Makefile প্যাচ করা
           cd drivers/net/wireless/realtek/rtl8812au
           sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' Makefile
           sed -i 's/CONFIG_PLATFORM_ANDROID_ARM64 = n/CONFIG_PLATFORM_ANDROID_ARM64 = y/g' Makefile
           sed -i 's/obj-m := $(MODULE_NAME).o/obj-$(CONFIG_RTL8812AU) += $(MODULE_NAME).o/g' Makefile
           cd ../../../..
           
-          # ৩. কার্নেল ট্রিতে ড্রাইভার রেজিস্ট্রেশন
+          # ৩. Kconfig ও Makefile ফাইল নিশ্চিত করা এবং এন্ট্রি যোগ করা
+          mkdir -p drivers/net/wireless/realtek
+          touch drivers/net/wireless/realtek/Kconfig
+          touch drivers/net/wireless/realtek/Makefile
+          
           echo 'source "drivers/net/wireless/realtek/rtl8812au/Kconfig"' >> drivers/net/wireless/realtek/Kconfig
           echo 'obj-$(CONFIG_RTL8812AU) += rtl8812au/' >> drivers/net/wireless/realtek/Makefile
           
-          # ৪. defconfig ফিক্স (88XXAU চালু, rtl8xxxu বন্ধ)
+          # ৪. defconfig ফিক্স
           sed -i 's/CONFIG_88XXAU=.*/CONFIG_88XXAU=y/g' arch/arm64/configs/lavender-perf_defconfig
           echo "CONFIG_RTL8812AU=y" >> arch/arm64/configs/lavender-perf_defconfig
           echo "# CONFIG_RTL8XXXU is not set" >> arch/arm64/configs/lavender-perf_defconfig
