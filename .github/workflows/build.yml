@@ -21,7 +21,9 @@ jobs:
 
       - name: Setup 88XXau Driver Automatically
         run: |
-          # ১. ড্রাইভার ডাউনলোড
+          cd $GITHUB_WORKSPACE
+          
+          # ১. ড্রাইভারটি সঠিক ফোল্ডারে ডাউনলোড করা
           git clone --depth=1 https://github.com/aircrack-ng/rtl8812au.git drivers/net/wireless/realtek/rtl8812au
           rm -rf drivers/net/wireless/realtek/rtl8812au/.git
           
@@ -30,20 +32,25 @@ jobs:
           sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' Makefile
           sed -i 's/CONFIG_PLATFORM_ANDROID_ARM64 = n/CONFIG_PLATFORM_ANDROID_ARM64 = y/g' Makefile
           sed -i 's/obj-m := $(MODULE_NAME).o/obj-$(CONFIG_RTL8812AU) += $(MODULE_NAME).o/g' Makefile
-          cd ../../../..
+          cd $GITHUB_WORKSPACE
           
-          # ৩. Kconfig ও Makefile ফাইল নিশ্চিত করা এবং এন্ট্রি যোগ করা
+          # ৩. কার্নেলের Kconfig ও Makefile-এ ড্রাইভার রেজিস্ট্রেশন
           mkdir -p drivers/net/wireless/realtek
           touch drivers/net/wireless/realtek/Kconfig
           touch drivers/net/wireless/realtek/Makefile
-          
           echo 'source "drivers/net/wireless/realtek/rtl8812au/Kconfig"' >> drivers/net/wireless/realtek/Kconfig
           echo 'obj-$(CONFIG_RTL8812AU) += rtl8812au/' >> drivers/net/wireless/realtek/Makefile
           
-          # ৪. defconfig ফিক্স
-          sed -i 's/CONFIG_88XXAU=.*/CONFIG_88XXAU=y/g' arch/arm64/configs/lavender-perf_defconfig
-          echo "CONFIG_RTL8812AU=y" >> arch/arm64/configs/lavender-perf_defconfig
-          echo "# CONFIG_RTL8XXXU is not set" >> arch/arm64/configs/lavender-perf_defconfig
+          # ৪. defconfig ফাইলটি খুঁজে বের করে প্যাচ করা (অটো-ডিটেকশন)
+          DEFCONFIG_FILE=$(find arch/arm64/configs -name "lavender-perf_defconfig" | head -n 1)
+          if [ -z "$DEFCONFIG_FILE" ]; then
+            DEFCONFIG_FILE=$(find arch/arm64/configs -name "*lavender*defconfig" | head -n 1)
+          fi
+          echo "Using defconfig: $DEFCONFIG_FILE"
+          
+          sed -i 's/CONFIG_88XXAU=.*/CONFIG_88XXAU=y/g' "$DEFCONFIG_FILE"
+          echo "CONFIG_RTL8812AU=y" >> "$DEFCONFIG_FILE"
+          echo "# CONFIG_RTL8XXXU is not set" >> "$DEFCONFIG_FILE"
 
       - name: Build Kernel
         run: |
