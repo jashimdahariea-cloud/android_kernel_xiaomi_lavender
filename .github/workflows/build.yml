@@ -1,26 +1,86 @@
-- name: Setup 88XXau Driver Automatically
-  run: |
-    cd $GITHUB_WORKSPACE
-    
-    # ১. v5.6.4.2 ড্রাইভার ডাউনলোড
-    git clone -b v5.6.4.2 --depth=1 https://github.com/aircrack-ng/rtl8812au.git drivers/net/wireless/realtek/rtl8812au
-    rm -rf drivers/net/wireless/realtek/rtl8812au/.git
-    
-    # ২. ড্রাইভারের Makefile প্যাচ করা (মডিউল হিসেবে বিল্ড করার জন্য)
-    cd drivers/net/wireless/realtek/rtl8812au
-    sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' Makefile
-    sed -i 's/CONFIG_PLATFORM_ANDROID_ARM64 = n/CONFIG_PLATFORM_ANDROID_ARM64 = y/g' Makefile
-    cd $GITHUB_WORKSPACE
-    
-    # ৩. কার্নেলের Kconfig ও Makefile-এ ড্রাইভার রেজিস্ট্রেশন (মডিউল হিসেবে)
-    mkdir -p drivers/net/wireless/realtek
-    touch drivers/net/wireless/realtek/Kconfig
-    touch drivers/net/wireless/realtek/Makefile
-    echo 'source "drivers/net/wireless/realtek/rtl8812au/Kconfig"' >> drivers/net/wireless/realtek/Kconfig
-    echo 'obj-$(CONFIG_RTL8812AU) += rtl8812au/' >> drivers/net/wireless/realtek/Makefile
-    
-    # ৪. defconfig ফাইলে ড্রাইভারকে মডিউল (=m) হিসেবে সেট করা
-    DEFCONFIG_FILE=$(find arch/arm64/configs -name "lavender-perf_defconfig" | head -n 1)
-    echo "Using defconfig: $DEFCONFIG_FILE"
-    echo "# CONFIG_RTL8XXXU is not set" >> "$DEFCONFIG_FILE"
-    echo "CONFIG_RTL8812AU=m" >> "$DEFCONFIG_FILE"
+name: Build Nethunter Kernel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache curl flex g++-11-multilib gcc-11-multilib git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3 python2 libtinfo5 gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+
+      - name: Clone Toolchain
+        run: |
+          git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
+
+      - name: Setup 88XXau Driver Automatically
+        run: |
+          cd $GITHUB_WORKSPACE
+          
+          # ১. v5.6.4.2 ড্রাইভার ডাউনলোড
+          git clone -b v5.6.4.2 --depth=1 https://github.com/aircrack-ng/rtl8812au.git drivers/net/wireless/realtek/rtl8812au
+          rm -rf drivers/net/wireless/realtek/rtl8812au/.git
+          
+          # ২. ড্রাইভারের Makefile প্যাচ করা (মডিউল হিসেবে বিল্ড করার জন্য)
+          cd drivers/net/wireless/realtek/rtl8812au
+          sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' Makefile
+          sed -i 's/CONFIG_PLATFORM_ANDROID_ARM64 = n/CONFIG_PLATFORM_ANDROID_ARM64 = y/g' Makefile
+          cd $GITHUB_WORKSPACE
+          
+          # ৩. কার্নেলের Kconfig ও Makefile-এ ড্রাইভার রেজিস্ট্রেশন (মডিউল হিসেবে)
+          mkdir -p drivers/net/wireless/realtek
+          touch drivers/net/wireless/realtek/Kconfig
+          touch drivers/net/wireless/realtek/Makefile
+          echo 'source "drivers/net/wireless/realtek/rtl8812au/Kconfig"' >> drivers/net/wireless/realtek/Kconfig
+          echo 'obj-$(CONFIG_RTL8812AU) += rtl8812au/' >> drivers/net/wireless/realtek/Makefile
+          
+          # ৪. defconfig ফাইলে ড্রাইভারকে মডিউল (=m) হিসেবে সেট করা
+          DEFCONFIG_FILE=$(find arch/arm64/configs -name "lavender-perf_defconfig" | head -n 1)
+          echo "Using defconfig: $DEFCONFIG_FILE"
+          echo "# CONFIG_RTL8XXXU is not set" >> "$DEFCONFIG_FILE"
+          echo "CONFIG_RTL8812AU=m" >> "$DEFCONFIG_FILE"
+
+      - name: Build Kernel
+        run: |
+          export ARCH=arm64
+          export SUBARCH=arm64
+          export PATH=$GITHUB_WORKSPACE/clang/bin:$PATH
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+          export CC=clang
+          export CLANG_TRIPLE=aarch64-linux-gnu-
+          make O=out ARCH=arm64 lavender-perf_defconfig
+          make O=out ARCH=arm64 -j$(nproc) 2>&1 | tee build.log
+
+      - name: Clone AnyKernel3 and Apply Fixes
+        run: |
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git anykernel
+          rm -rf anykernel/.git
+          cp out/arch/arm64/boot/Image.gz-dtb anykernel/
+          
+          sed -i 's/^device.name1=.*/device.name1=lavender/' anykernel/anykernel.sh
+          sed -i 's/^device.name2=.*/device.name2=/' anykernel/anykernel.sh
+          sed -i 's/^device.name3=.*/device.name3=/' anykernel/anykernel.sh
+          sed -i 's/^device.name4=.*/device.name4=/' anykernel/anykernel.sh
+          sed -i 's/^device.name5=.*/device.name5=/' anykernel/anykernel.sh
+          
+          sed -i 's|^BLOCK=.*|BLOCK=/dev/block/bootdevice/by-name/boot;|' anykernel/anykernel.sh
+          sed -i 's|^block=.*|block=/dev/block/bootdevice/by-name/boot;|' anykernel/anykernel.sh
+          sed -i 's/^IS_SLOT_DEVICE=.*/IS_SLOT_DEVICE=0;/' anykernel/anykernel.sh
+          
+      - name: Create Flashable ZIP
+        run: |
+          cd anykernel
+          zip -r ../Nethunter-Kernel-Lavender.zip *
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nethunter-Kernel
+          path: Nethunter-Kernel-Lavender.zip
